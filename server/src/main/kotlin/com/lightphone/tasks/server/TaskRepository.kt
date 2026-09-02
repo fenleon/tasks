@@ -176,14 +176,19 @@ object TaskRepository {
      *  inbox, [KEY_PLANNED] tasks with a due, [KEY_COMPLETED] done tasks,
      *  anything else = that category's tasks. Completed rows show **only** in
      *  the Completed view (feedback 2026-09-02: All and every list hide done
-     *  tasks — the old per-view SHOW COMPLETED flag no longer gates
-     *  anything); [keepVisible] carries the task ids just marked done in the
-     *  current view, which stay visible, marked off, for a few minutes until a
-     *  hide timer clears them (feedback 2026-08-26 + 2026-09-02) — kept rows
-     *  also keep their open-task sort position. Display order (feedback): done
+     *  tasks) unless [includeDone] is set — the Inbox / stored-list SHOW DONE
+     *  toggle (feedback 2026-09-02) mixes the view's done rows back in;
+     *  [keepVisible] carries the task ids just marked done in the current
+     *  view, which stay visible, marked off, for a few minutes until a hide
+     *  timer clears them (feedback 2026-08-26 + 2026-09-02) — kept rows also
+     *  keep their open-task sort position. Display order (feedback): done
      *  last, then due asc (nulls last), then title alphabetical, then
      *  createdAt. */
-    fun tasksForContext(key: String, keepVisible: Set<String> = emptySet()): List<Task> {
+    fun tasksForContext(
+        key: String,
+        keepVisible: Set<String> = emptySet(),
+        includeDone: Boolean = false,
+    ): List<Task> {
         val all = mutableTasks.value.filter { it.deletedAt == null }
         val filtered = when (key) {
             KEY_ALL -> all
@@ -192,7 +197,7 @@ object TaskRepository {
             KEY_COMPLETED -> all.filter { it.done }
             else -> all.filter { it.categoryId == key }
         }
-        val visible = if (key == KEY_COMPLETED) {
+        val visible = if (key == KEY_COMPLETED || includeDone) {
             filtered
         } else {
             filtered.filter { !it.done || it.id in keepVisible }

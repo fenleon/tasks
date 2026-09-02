@@ -25,6 +25,7 @@ import com.thelightphone.sdk.SimpleLightScreen
 import com.thelightphone.sdk.ui.LightBarButton
 import com.thelightphone.sdk.ui.LightBottomBar
 import com.thelightphone.sdk.ui.LightIcons
+import com.thelightphone.sdk.ui.LightScrollBarPosition
 import com.thelightphone.sdk.ui.LightScrollView
 import com.thelightphone.sdk.ui.LightText
 import com.thelightphone.sdk.ui.LightTextVariant
@@ -35,6 +36,7 @@ import com.thelightphone.sdk.ui.LightTopBar
 import com.thelightphone.sdk.ui.LightTopBarCenter
 import com.thelightphone.sdk.ui.gridUnitsAsDp
 import com.thelightphone.sdk.ui.lightClickable
+import com.thelightphone.sdk.ui.scrollBarGutterUnits
 import com.thelightphone.sdk.ui.verticalGridUnitsAsDp
 import java.time.LocalTime
 import kotlin.math.roundToInt
@@ -68,33 +70,32 @@ class TimePickerScreen(
                 LightTopBar(
                     center = LightTopBarCenter.Text(text = "Start time"),
                 )
-                Box(modifier = Modifier.weight(1f)) {
-                    Column(modifier = Modifier.padding(horizontal = 2f.gridUnitsAsDp())) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(
-                                    TIME_ROW_HEIGHT_UNITS.verticalGridUnitsAsDp() *
-                                        TIME_ROWS_VISIBLE,
-                                ),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            TimeColumn(
-                                label = "HOUR",
-                                values = (0..23).toList(),
-                                selected = time.hour,
-                                onSelect = { hour -> time = time.withHour(hour) },
-                                modifier = Modifier.weight(1f),
-                            )
-                            TimeColumn(
-                                label = "MIN",
-                                values = (0..59).toList(),
-                                selected = time.minute,
-                                onSelect = { minute -> time = time.withMinute(minute) },
-                                modifier = Modifier.weight(1f),
-                            )
-                        }
-                    }
+                // HOUR / MIN each fill half the width and the full height
+                // between the bars, so the scrollable values run down to the
+                // bottom bar (feedback 2026-09-02: the old fixed 4-row window
+                // cut the list off after ~3 values and left the screen below
+                // empty).
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .padding(horizontal = 2f.gridUnitsAsDp()),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TimeColumn(
+                        label = "HOUR",
+                        values = (0..23).toList(),
+                        selected = time.hour,
+                        onSelect = { hour -> time = time.withHour(hour) },
+                        modifier = Modifier.weight(1f),
+                    )
+                    TimeColumn(
+                        label = "MIN",
+                        values = (0..59).toList(),
+                        selected = time.minute,
+                        onSelect = { minute -> time = time.withMinute(minute) },
+                        modifier = Modifier.weight(1f),
+                    )
                 }
                 LightBottomBar(
                     modifier = Modifier.navigationBarsPadding(),
@@ -120,8 +121,8 @@ class TimePickerScreen(
 }
 
 /** One scrollable value column (HOUR / MIN) with a selection underline — the
- *  passes time-picker idiom. Scrolls so the selected value centers below the
- *  label. */
+ *  passes time-picker idiom. The column fills the height between the bars;
+ *  opening scrolls the selected value a couple of rows below the label. */
 @Composable
 private fun TimeColumn(
     label: String,
@@ -138,7 +139,17 @@ private fun TimeColumn(
             text = label,
             variant = LightTextVariant.Fine,
             align = TextAlign.Center,
-            modifier = Modifier.padding(vertical = 0.5f.gridUnitsAsDp()),
+            // The scroll viewport below reserves its scrollbar gutter at the
+            // right edge, so the values center one grid unit left of the
+            // column's center; the label takes the same gutter padding to sit
+            // centered over them (feedback 2026-09-02: HOUR/MIN read shifted
+            // right of their columns).
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(
+                    end = scrollBarGutterUnits(LightScrollBarPosition.Outside).gridUnitsAsDp(),
+                )
+                .padding(vertical = 0.5f.gridUnitsAsDp()),
         )
         val density = LocalDensity.current
         val rowHeight = TIME_ROW_HEIGHT_UNITS.verticalGridUnitsAsDp()
@@ -175,7 +186,7 @@ private fun TimeColumn(
     }
 }
 
-// Time-picker geometry (passes recipe): 2.5 vertical-grid-unit rows, with 4
-// rows visible.
+// Time-picker geometry (passes recipe): 2.5 vertical-grid-unit rows. The
+// columns fill the whole height between the bars; the initial scroll puts the
+// selected value a couple of rows below the top (feedback 2026-08-24).
 private const val TIME_ROW_HEIGHT_UNITS = 2.5f
-private const val TIME_ROWS_VISIBLE = 4

@@ -42,7 +42,10 @@ import com.thelightphone.sdk.ui.lightClickable
  * context and returns. Rows are the four built-ins (All, Inbox, Planned,
  * Completed) then stored lists alphabetically (feedback 11); the currently
  * selected view is underlined (feedback 10), and each row shows its **open**
- * task count (feedback 2026-08-26: only what's not done) near the scrollbar.
+ * task count (feedback 2026-08-26: only what's not done) near the scrollbar —
+ * zero counts render as nothing (feedback 2026-09-02: a "0" reads as noise),
+ * and the Completed row counts its done tasks (its open count is always
+ * zero).
  * EDIT (top right, DONE to leave — same size as the bottom-bar buttons,
  * feedback 2026-08-26) switches to delete mode: only stored lists show, each
  * with an X at the far left (no underline, no counts), and the bottom bar
@@ -168,21 +171,22 @@ class CategoriesScreen(
         }
     }
 
-    /** Open (not-done) task count for a view key — counts never include
-     *  completed tasks (feedback 2026-08-26); the Completed view's is always
-     *  zero. */
+    /** The count shown next to a view's row — what its default view shows:
+     *  the open (not-done) tasks for every view, but Completed counts its done
+     *  tasks (feedback 2026-09-02), since that view shows nothing else. */
     private fun openCountFor(key: String, tasks: List<Task>): Int =
         when (key) {
             TaskRepository.KEY_ALL -> tasks.count { !it.done }
             TaskRepository.KEY_INBOX -> tasks.count { it.categoryId == null && !it.done }
             TaskRepository.KEY_PLANNED -> tasks.count { it.dueAt != null && !it.done }
-            TaskRepository.KEY_COMPLETED -> 0
+            TaskRepository.KEY_COMPLETED -> tasks.count { it.done }
             else -> tasks.count { it.categoryId == key && !it.done }
         }
 }
 
 /** One context row: the name left, the open task count near the scrollbar
- *  (feedback 2026-08-26); in delete mode a stored category shows an X at the
+ *  (feedback 2026-08-26), omitted entirely when it is zero (feedback
+ *  2026-09-02); in delete mode a stored category shows an X at the
  *  far left instead of the count (feedback 2026-08-26) and the selection
  *  underline is suppressed. The row keeps its padding in both modes, so the
  *  spacing never changes (feedback 2026-08-26). All text full content color. */
@@ -224,10 +228,13 @@ private fun CategoryRow(
                     modifier = if (selected) Modifier.thinUnderline() else Modifier,
                 )
             }
-            LightText(
-                text = count.toString(),
-                variant = LightTextVariant.Copy,
-            )
+            // No count when there is nothing to count (feedback 2026-09-02).
+            if (count > 0) {
+                LightText(
+                    text = count.toString(),
+                    variant = LightTextVariant.Copy,
+                )
+            }
         }
     }
 }

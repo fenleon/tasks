@@ -96,6 +96,13 @@ class HomeViewModel : LightViewModel<Unit>() {
      *  [select]. */
     val dueTodayOnly = MutableStateFlow(false)
 
+    /** The Inbox / stored-list SHOW DONE toggle (feedback 2026-09-02): when
+     *  set, the view mixes its done tasks back in (struck, below the open
+     *  ones); the bottom-bar button reads HIDE DONE. Only these views get the
+     *  button — All and Planned stay completed-free, Completed shows nothing
+     *  else. Reset by [select], like [dueTodayOnly]. */
+    val showDone = MutableStateFlow(false)
+
     init {
         viewModelScope.launch {
             combineState()
@@ -108,10 +115,11 @@ class HomeViewModel : LightViewModel<Unit>() {
             TaskRepository.categories,
             selectedKey,
             recentlyDone,
-        ) { _, cats, key, keep ->
+            showDone,
+        ) { _, cats, key, keep, done ->
             categories.value = cats
             context.value = contextFor(key, cats)
-            tasks.value = TaskRepository.tasksForContext(key, keep)
+            tasks.value = TaskRepository.tasksForContext(key, keep, done)
         }.collect { }
     }
 
@@ -131,6 +139,11 @@ class HomeViewModel : LightViewModel<Unit>() {
         doneHideTimers.values.forEach { it.cancel() }
         doneHideTimers.clear()
         dueTodayOnly.value = false
+        showDone.value = false
+    }
+
+    fun toggleShowDone() {
+        showDone.value = !showDone.value
     }
 
     fun setDone(task: Task, done: Boolean) {
@@ -174,6 +187,7 @@ class HomeScreen(sealedActivity: SealedLightActivity) :
         val tasks by viewModel.tasks.collectAsState()
         val categories by viewModel.categories.collectAsState()
         val dueTodayOnly by viewModel.dueTodayOnly.collectAsState()
+        val showDone by viewModel.showDone.collectAsState()
 
         LightTheme(colors = themeColors) {
             Column(
@@ -217,7 +231,7 @@ class HomeScreen(sealedActivity: SealedLightActivity) :
                                 else -> shown.forEach { task ->
                                     // All and Completed (feedback 2026-09-02)
                                     // are flat lists whose rows carry the
-                                    // "{category}, {date}" line — the group
+                                    // "{category} · {date}" line — the group
                                     // headers are gone with the completed rows.
                                     val meta = if (context == TaskContext.ALL || context == TaskContext.COMPLETED) {
                                         rowMeta(task, categories)
@@ -254,6 +268,19 @@ class HomeScreen(sealedActivity: SealedLightActivity) :
                                 LightBarButton.Text(
                                     text = if (dueTodayOnly) "VIEW ALL" else "DUE TODAY",
                                     onClick = { viewModel.toggleDueToday() },
+                                ),
+                            )
+                        } else if (
+                            context.key == TaskRepository.KEY_INBOX ||
+                            !context.isBuiltIn
+                        ) {
+                            // Inbox and stored lists get the SHOW DONE toggle
+                            // (feedback 2026-09-02) — mix the view's completed
+                            // tasks back in / hide them again.
+                            add(
+                                LightBarButton.Text(
+                                    text = if (showDone) "HIDE DONE" else "SHOW DONE",
+                                    onClick = { viewModel.toggleShowDone() },
                                 ),
                             )
                         } else {
@@ -311,20 +338,22 @@ class HomeScreen(sealedActivity: SealedLightActivity) :
     }
 }
 
-/** The row's "{category}, {date}" subtitle (feedback 2026-09-02) — shown on
- *  the All, Planned and Completed panels, where the rows carry their list:
- *  "Inbox", "Errands", or "Errands, Sep 3, 14:30" when the task has a due.
- *  (Inbox and single-list views skip it — the list is already the context.) */
+/** The row's "{category} · {date}" subtitle (feedback 2026-09-02: the dot,
+ *  not a comma — the category and due read as separate items, like the
+ *  bottom-bar separators) — shown on the All, Planned and Completed panels,
+ *  where the rows carry their list: "Inbox", "Errands", or "Errands · Sep 3,
+ *  14:30" when the task has a due. (Inbox and single-list views skip it — the
+ *  list is already the context.) */
 private fun rowMeta(task: Task, categories: List<Category>): String {
     val name = task.categoryId?.let { id -> categories.firstOrNull { it.id == id }?.name }
         ?: "Inbox"
     val due = task.dueAt?.let { TaskFormat.formatDue(it) }
-    return if (due != null) "$name, $due" else name
+    return if (due != null) "$name · $due" else name
 }
 
 /** The "Planned" view (feedback 2026-08-26): tasks with a due date divided
  *  under the topline headers Overdue / Due Today / Upcoming; each row's
- *  subtitle is "{category}, {date}" (feedback 2026-09-02). When the DUE TODAY
+ *  subtitle is "{category} · {date}" (feedback 2026-09-02). When the DUE TODAY
  *  filter is on, [tasks] already holds only today's tasks, so just the
  *  "Due Today" section renders. */
 @Composable
@@ -387,7 +416,7 @@ private fun EmptyState(text: String) {
 
 /** One task row: leading check affordance (drawn outline square → filled ✓),
  *  Heading title, then a Superfine subtitle line — [meta] when the panel
- *  passes one ("{category}, {date}", feedback 2026-09-02), else the task's
+ *  passes one ("{category} · {date}", feedback 2026-09-02), else the task's
  *  "[Date], [Time]" due (feedback 19). Tap the check toggles done; tap the
  *  body opens the editor. Done rows are struck through; all text is the full
  *  content color (feedback 9). */

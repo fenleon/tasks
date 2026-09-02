@@ -15,8 +15,8 @@ import kotlin.test.assertTrue
  *  done ones, soft delete, the view queries
  *  (All/Inbox/Planned/Completed/custom), display order + the kept-visible
  *  just-completed rows (only the Completed view lists done tasks otherwise,
- *  feedback 2026-09-02), and a second load from the same dir seeing
- *  everything the first instance wrote. */
+ *  or the SHOW DONE includeDone flag, feedback 2026-09-02), and a second
+ *  load from the same dir seeing everything the first instance wrote. */
 class TaskRepositoryTest {
 
     private val dir = File(System.getProperty("java.io.tmpdir"), "tasks-test-${UUID.randomUUID()}")
@@ -84,6 +84,25 @@ class TaskRepositoryTest {
             TaskRepository.tasksForContext(work.id, setOf(workLate.id)).map { it.title },
         )
 
+        // The Inbox / stored-list SHOW DONE toggle (feedback 2026-09-02):
+        // done rows mix back into a list only when includeDone is set, sorted
+        // below the open ones.
+        val inboxDone = TaskRepository.addTask("inbox done", null, dueAt = null)
+        TaskRepository.setDone(inboxDone.id, true)
+        assertEquals(listOf("work no due"), TaskRepository.tasksForContext(work.id).map { it.title })
+        assertEquals(
+            listOf("work no due", "work late"),
+            TaskRepository.tasksForContext(work.id, includeDone = true).map { it.title },
+        )
+        assertEquals(
+            listOf("inbox early"),
+            TaskRepository.tasksForContext(TaskRepository.KEY_INBOX).map { it.title },
+        )
+        assertEquals(
+            listOf("inbox early", "inbox done"),
+            TaskRepository.tasksForContext(TaskRepository.KEY_INBOX, includeDone = true).map { it.title },
+        )
+
         // Deleting a category moves its open tasks to the Inbox and
         // soft-deletes its completed ones (feedback 2026-08-26).
         val errandDone = TaskRepository.addTask("errand done", errands.id, dueAt = null)
@@ -113,7 +132,7 @@ class TaskRepositoryTest {
         val onDisk = lightJson.decodeFromString(TasksFile.serializer(), file.readText())
         assertEquals(1, onDisk.schemaVersion)
         assertEquals(2, onDisk.categories.size)
-        assertEquals(5, onDisk.tasks.size) // all five still stored (soft delete keeps the row)
+        assertEquals(6, onDisk.tasks.size) // all six still stored (soft delete keeps the row)
         assertNotNull(onDisk.tasks.first { it.id == inboxEarly.id }.deletedAt)
         assertNotNull(onDisk.tasks.first { it.id == errandDone.id }.deletedAt)
     }
