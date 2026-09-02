@@ -26,9 +26,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
  * The quick-add screen (feedback 2/24): the LP3 keyboard is up immediately
  * and the first letter typed enters the task title (lowercase start — no
  * caps). SAVE creates the task (into the Inbox by default, or the current
- * stored category) and returns to the main panel. The second bottom-bar
- * action, DETAILS, carries the typed title into the full edit panel (category,
- * due, start time, notes). Back discards.
+ * stored list) and returns to the main panel. The second bottom-bar action,
+ * MORE (feedback 2026-09-02), carries the typed title into the full edit
+ * panel (list, due, start time, notes). Back discards.
  */
 class QuickAddScreen(
     sealedActivity: SealedLightActivity,
@@ -69,7 +69,7 @@ class QuickAddScreen(
                 initialCaps = false,
                 inputTextStyle = inputStyle,
                 bottomBarLeadingButton = LightBarButton.Text(
-                    text = "DETAILS",
+                    text = "MORE",
                     onClick = { openDetails(textState.text.toString().trim()) },
                 ),
             )
@@ -82,8 +82,8 @@ class QuickAddScreen(
         goBack()
     }
 
-    /** DETAILS — hand the typed title into the full edit panel; the fresh
-     *  task keeps its category, everything else comes from the edit screen.
+    /** MORE — hand the typed title into the full edit panel; the fresh task
+     *  keeps its list, everything else comes from the edit screen.
      *  The quick-add pops itself first (feedback 2026-08-26: back/SAVE from
      *  the editor must land on the main panel, not on an emptied quick-add),
      *  so the stack becomes Home → Edit. */

@@ -35,10 +35,11 @@ internal data class TasksFile(
     val schemaVersion: Int = SCHEMA_VERSION,
     val categories: List<Category> = emptyList(),
     val tasks: List<Task> = emptyList(),
-    // Per-view "show completed" flag (the category edit menu's SHOW COMPLETED),
-    // keyed by view key: TaskRepository.KEY_INBOX / KEY_PLANNED or a category
-    // id. Defaults false; "All" always shows everything and "Completed" is
-    // completed-only, so neither consults the map.
+    // Legacy per-view "show completed" flag (the removed category edit
+    // menu's SHOW COMPLETED), keyed by view key. Kept only so files written
+    // by older builds decode and round-trip unchanged; no UI reads or sets it
+    // any more — since feedback 2026-09-02 the Completed view alone shows
+    // done tasks.
     val showCompleted: Map<String, Boolean> = emptyMap(),
 ) {
     companion object {

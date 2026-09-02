@@ -54,12 +54,14 @@ data class TimePick(val time: LocalTime?)
 
 /**
  * Add / Edit task — one screen, two modes (taskId null = add, optionally
- * prefilled with a title + category from the quick-add's DETAILS, feedback
- * 24). Top bar: just the centered "Edit Task" / "New Task" title — no back
- * navigation (the bottom-bar X dismisses). Rows (feedback 2026-08-26): the
- * name with no label, just the value + input underline; Category; Due Date
- * and Start Time on one line (always both); Notes reading "Add Notes" /
- * "Edit Notes". Bottom bar: Delete (edit only) · X · SAVE.
+ * prefilled with a title + list from the quick-add's MORE, feedback 24). Top
+ * bar: just the centered "Edit Task" / "New Task" title — no back navigation
+ * (the bottom-bar X dismisses). Rows (feedback 2026-08-26): the name with no
+ * label, just the value + input underline; List; Due Date and Start Time on
+ * one line (always both); Notes reading "Add Notes" / "Edit Notes" at the
+ * same size as the title (feedback 2026-09-02). Bottom bar: Delete (edit
+ * only — deletes immediately, no confirmation, feedback 2026-09-02) · X ·
+ * SAVE.
  */
 class TaskEditViewModel(
     private val taskId: String?,
@@ -106,25 +108,12 @@ class TaskEditViewModel(
         screen.goBack()
     }
 
-    /** Deletes via the shared ConfirmDelete screen; on confirm the task is
-     *  removed and the edit screen pops back to the details screen, which
-     *  sees the task is gone and pops on to Home. */
+    /** Deletes immediately — no confirmation panel (feedback 2026-09-02).
+     *  The edit screen pops back to the details screen, which sees the task
+     *  is gone and pops on to Home. */
     fun delete(screen: SimpleLightScreen<Unit>) {
-        screen.navigateTo(screenFactory = {
-            ConfirmDeleteScreen(
-                it,
-                topBarTitle = title.value,
-                mainText = "Are you sure you'd like to delete this task?",
-                cancelText = null,
-                confirmText = "CONFIRM",
-                confirmCentered = true,
-            )
-        }) { deleted ->
-            if (deleted == true) {
-                taskId?.let { id -> TaskRepository.deleteTask(id) }
-                screen.goBack()
-            }
-        }
+        taskId?.let { id -> TaskRepository.deleteTask(id) }
+        screen.goBack()
     }
 }
 
@@ -156,7 +145,8 @@ class TaskEditScreen(
             TaskFormat.formatDue(TaskFormat.combine(selectedDate, selectedTime))
         }
         val timeDisplay = selectedTime?.let { TaskFormat.formatTime(it) }.orEmpty()
-        val categoryName = categoryId?.let { TaskRepository.getCategory(it)?.name } ?: "None"
+        // The Inbox reads "Inbox", never "None" (feedback 2026-09-02).
+        val listName = categoryId?.let { TaskRepository.getCategory(it)?.name } ?: "Inbox"
 
         LightTheme(colors = themeColors) {
             Column(
@@ -194,9 +184,9 @@ class TaskEditScreen(
                             )
                         }
                         EditFieldRow(
-                            label = "Category",
-                            value = categoryName,
-                            placeholder = "None",
+                            label = "List",
+                            value = listName,
+                            placeholder = "Inbox",
                             onClick = { pickCategory() },
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -225,7 +215,8 @@ class TaskEditScreen(
                                 modifier = Modifier.weight(1f),
                             )
                         }
-                        // Notes — the row reads "Add Notes" / "Edit Notes",
+                        // Notes — the row reads "Add Notes" / "Edit Notes" at
+                        // the same size as the title (feedback 2026-09-02),
                         // opening the composer (feedback 2026-08-26).
                         Column(
                             modifier = Modifier
@@ -235,7 +226,7 @@ class TaskEditScreen(
                         ) {
                             LightText(
                                 text = if (notes.isBlank()) "Add Notes" else "Edit Notes",
-                                variant = LightTextVariant.Copy,
+                                variant = LightTextVariant.Heading,
                             )
                             Spacer(Modifier.height(0.25f.gridUnitsAsDp()))
                             Box(

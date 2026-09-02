@@ -30,12 +30,12 @@ import com.thelightphone.sdk.ui.gridUnitsAsDp
 import com.thelightphone.sdk.ui.lightClickable
 
 /**
- * The category picker — the edit screen's Category row destination (feedback
- * 23): mirrors the categories panel minus the virtual views (ignoring All,
- * Planned, Completed) — Inbox (None) plus each stored category, all
- * left-aligned, the selected one underlined. Tap picks and returns; back
- * keeps the previous selection. Result: [CategorySelection] (`id == null` =
- * Inbox).
+ * The list picker — the edit screen's List row destination (feedback 23):
+ * mirrors the lists panel minus the virtual views (ignoring All, Planned,
+ * Completed) — Inbox (feedback 2026-09-02: shown as "Inbox", never "None")
+ * plus each stored list, all left-aligned, the selected one underlined. Tap
+ * picks and returns; back keeps the previous selection. Result:
+ * [CategorySelection] (`id == null` = Inbox).
  */
 class CategoryPickerScreen(
     sealedActivity: SealedLightActivity,
@@ -60,7 +60,7 @@ class CategoryPickerScreen(
                         onClick = { goBack() },
                         contentDescription = "Back",
                     ),
-                    center = LightTopBarCenter.Text(text = "Category"),
+                    center = LightTopBarCenter.Text(text = "List"),
                 )
                 Box(modifier = Modifier.weight(1f)) {
                     LightScrollView {

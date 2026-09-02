@@ -25,11 +25,15 @@ object TaskRepository {
     /** Raw in-memory snapshots (insertion order). Queries apply the sort. */
     private val mutableTasks = MutableStateFlow<List<Task>>(emptyList())
     private val mutableCategories = MutableStateFlow<List<Category>>(emptyList())
+
+    /** Legacy per-view SHOW COMPLETED map (the category edit menu, removed
+     *  2026-08-26). No UI sets it any more and queries ignore it (feedback
+     *  2026-09-02: only the Completed view shows done tasks) — kept purely so
+     *  old files round-trip unchanged. */
     private val mutableShowCompleted = MutableStateFlow<Map<String, Boolean>>(emptyMap())
 
     val tasks: StateFlow<List<Task>> = mutableTasks.asStateFlow()
     val categories: StateFlow<List<Category>> = mutableCategories.asStateFlow()
-    val showCompletedFlow: StateFlow<Map<String, Boolean>> = mutableShowCompleted.asStateFlow()
 
     /** Idempotent — call once from the entry screen before first use. A
      *  missing file starts empty; a corrupt one is renamed aside to
@@ -97,7 +101,6 @@ object TaskRepository {
                     it
                 }
             }
-            mutableShowCompleted.value = mutableShowCompleted.value - id
             persist()
         }
     }
@@ -168,18 +171,19 @@ object TaskRepository {
     const val KEY_PLANNED = "planned"
     const val KEY_COMPLETED = "completed"
 
-    /** Non-deleted tasks in the given view (SPEC feedback 2026-08-26):
-     *  key [KEY_ALL] = everything, [KEY_INBOX] the implicit inbox,
-     *  [KEY_PLANNED] tasks with a due, [KEY_COMPLETED] done tasks, anything
-     *  else = that category's tasks. Completed rows show only when
-     *  [showCompleted] is set for the view — "All"/"Completed" always include
-     *  them. [keepVisible] carries the task ids just marked done in the current
-     *  view (feedback 2026-08-26: a completed task stays visible, marked off,
-     *  until the user leaves the panel even when completed rows are hidden) —
-     *  kept rows also keep their open-task sort position. Display order
-     *  (feedback): done last, then due asc (nulls last), then title
-     *  alphabetical, then createdAt. */
-    fun tasksForContext(key: String, showCompleted: Boolean, keepVisible: Set<String> = emptySet()): List<Task> {
+    /** Non-deleted tasks in the given view (SPEC feedback 2026-08-26 +
+     *  2026-09-02): key [KEY_ALL] = everything, [KEY_INBOX] the implicit
+     *  inbox, [KEY_PLANNED] tasks with a due, [KEY_COMPLETED] done tasks,
+     *  anything else = that category's tasks. Completed rows show **only** in
+     *  the Completed view (feedback 2026-09-02: All and every list hide done
+     *  tasks — the old per-view SHOW COMPLETED flag no longer gates
+     *  anything); [keepVisible] carries the task ids just marked done in the
+     *  current view, which stay visible, marked off, for a few minutes until a
+     *  hide timer clears them (feedback 2026-08-26 + 2026-09-02) — kept rows
+     *  also keep their open-task sort position. Display order (feedback): done
+     *  last, then due asc (nulls last), then title alphabetical, then
+     *  createdAt. */
+    fun tasksForContext(key: String, keepVisible: Set<String> = emptySet()): List<Task> {
         val all = mutableTasks.value.filter { it.deletedAt == null }
         val filtered = when (key) {
             KEY_ALL -> all
@@ -188,46 +192,12 @@ object TaskRepository {
             KEY_COMPLETED -> all.filter { it.done }
             else -> all.filter { it.categoryId == key }
         }
-        val visible = if (key == KEY_ALL || key == KEY_COMPLETED || showCompleted) {
+        val visible = if (key == KEY_COMPLETED) {
             filtered
         } else {
             filtered.filter { !it.done || it.id in keepVisible }
         }
         return visible.sortedWith(displayOrder(keepVisible))
-    }
-
-    /** The per-view SHOW COMPLETED flag (category edit menu; only consulted for
-     *  the Inbox, Planned and stored-category views). */
-    fun showCompleted(key: String): Boolean = mutableShowCompleted.value[key] ?: false
-
-    fun setShowCompleted(key: String, value: Boolean) {
-        synchronized(this) {
-            mutableShowCompleted.value = if (value) {
-                mutableShowCompleted.value + (key to true)
-            } else {
-                mutableShowCompleted.value - key
-            }
-            persist()
-        }
-    }
-
-    /** Marks every open (non-done) task in a view as done — the category edit
-     *  menu's MARK ALL. */
-    fun markAllDone(key: String) {
-        val keys = if (key == KEY_ALL) {
-            null // every task
-        } else {
-            mutableTasks.value.filter { it.deletedAt == null }
-                .filter { if (key == KEY_INBOX) it.categoryId == null else if (key == KEY_PLANNED) it.dueAt != null else it.categoryId == key }
-                .map { it.id }
-                .toSet()
-        }
-        synchronized(this) {
-            mutableTasks.value = mutableTasks.value.map {
-                if ((keys == null || it.id in keys) && !it.done) it.copy(done = true) else it
-            }
-            persist()
-        }
     }
 
     /** Lookups also hide soft-deleted tasks. */

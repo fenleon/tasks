@@ -29,9 +29,11 @@ import com.thelightphone.sdk.ui.gridUnitsAsDp
 /**
  * The read-only task details screen — tapping a task on Home opens this
  * (feedback 2026-08-26): a top bar of just back + EDIT (no title), then the
- * task name big, the date line under it ("Monday, August 24, 2026, 14:30"),
- * then the notes when there are any. EDIT opens the full edit screen; the
- * data is collected live, so a save in the editor is reflected here on
+ * task name big, the due under it, then the notes when there are any. A due
+ * with a time reads on two lines — the weekday inline with the time
+ * ("Thursday, 14:30") above the full date ("September 3, 2026"); a date-only
+ * due stays one line (feedback 2026-09-02). EDIT opens the full edit screen;
+ * the data is collected live, so a save in the editor is reflected here on
  * return. A task deleted via the editor's DELETE pops this screen back to
  * Home (the task no longer exists).
  */
@@ -86,9 +88,18 @@ class TaskDetailsScreen(
                                     variant = LightTextVariant.Heading,
                                     modifier = Modifier.padding(vertical = 1.5f.gridUnitsAsDp()),
                                 )
-                                task.dueAt?.let {
+                                task.dueAt?.let { due ->
+                                    // Weekday inline with the time, the full
+                                    // date on its own line (feedback
+                                    // 2026-09-02).
+                                    TaskFormat.formatDetailsDayTime(due)?.let {
+                                        LightText(
+                                            text = it,
+                                            variant = LightTextVariant.Copy,
+                                        )
+                                    }
                                     LightText(
-                                        text = TaskFormat.formatDetails(it),
+                                        text = TaskFormat.formatDetailsDate(due),
                                         variant = LightTextVariant.Copy,
                                     )
                                 }

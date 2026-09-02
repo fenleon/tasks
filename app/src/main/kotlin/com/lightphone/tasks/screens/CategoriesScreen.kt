@@ -37,19 +37,20 @@ import com.thelightphone.sdk.ui.gridUnitsAsDp
 import com.thelightphone.sdk.ui.lightClickable
 
 /**
- * The categories panel: a selection screen (feedback 7) — tapping a row picks
- * that view as the main context and returns. Rows are the four built-ins
- * (All, Inbox, Planned, Completed) then stored categories alphabetically
- * (feedback 11); the currently selected view is underlined (feedback 10), and
- * each row shows its **open** task count (feedback 2026-08-26: only what's
- * not done) near the scrollbar. EDIT (top right, DONE to leave — same size
- * as the bottom-bar buttons, feedback 2026-08-26) switches to delete mode:
- * only stored categories show, each with an X at the far left (no underline,
- * no counts), and the bottom bar disappears (no ADD NEW, feedback 2026-08-26).
- * The X deletes the category directly when it has no open tasks (feedback
- * 2026-08-26); otherwise the no-top-bar confirmation ("Delete category
- * [name]?", CANCEL · DELETE) appears. ADD NEW opens the new-category editor;
- * blank is refused. Rename lives behind the main panel's top-bar name.
+ * The lists panel (feedback 2026-09-02: the categories panel was renamed):
+ * a selection screen (feedback 7) — tapping a row picks that view as the main
+ * context and returns. Rows are the four built-ins (All, Inbox, Planned,
+ * Completed) then stored lists alphabetically (feedback 11); the currently
+ * selected view is underlined (feedback 10), and each row shows its **open**
+ * task count (feedback 2026-08-26: only what's not done) near the scrollbar.
+ * EDIT (top right, DONE to leave — same size as the bottom-bar buttons,
+ * feedback 2026-08-26) switches to delete mode: only stored lists show, each
+ * with an X at the far left (no underline, no counts), and the bottom bar
+ * disappears (no ADD NEW, feedback 2026-08-26). The X deletes the list
+ * directly when it has no open tasks (feedback 2026-08-26); otherwise the
+ * no-top-bar confirmation ("Delete list [name]?", CANCEL · DELETE) appears.
+ * ADD NEW opens the new-list editor; blank is refused. Rename lives behind
+ * the main panel's top-bar name.
  */
 class CategoriesScreen(
     sealedActivity: SealedLightActivity,
@@ -78,7 +79,7 @@ class CategoriesScreen(
                         onClick = { goBack() },
                         contentDescription = "Back",
                     ),
-                    center = LightTopBarCenter.Text(text = "Categories"),
+                    center = LightTopBarCenter.Text(text = "Lists"),
                     // EDIT/DONE sized like the bottom-bar text buttons
                     // (feedback 2026-08-26).
                     textVariant = LightTextVariant.Button,
@@ -136,7 +137,7 @@ class CategoriesScreen(
 
     private fun openAddCategory() {
         navigateTo(screenFactory = {
-            TitleEditorScreen(it, title = "New Category", initial = "")
+            TitleEditorScreen(it, title = "New List", initial = "")
         }) { name ->
             if (name.isNotBlank()) {
                 TaskRepository.addCategory(name)
@@ -144,7 +145,7 @@ class CategoriesScreen(
         }
     }
 
-    /** A category with no open tasks deletes immediately (feedback 2026-08-26);
+    /** A list with no open tasks deletes immediately (feedback 2026-08-26);
      *  with open tasks the confirmation explains the move. */
     private fun confirmDelete(category: Category) {
         val openTasks = TaskRepository.tasks.value.count {
@@ -157,8 +158,7 @@ class CategoriesScreen(
         navigateTo(screenFactory = {
             ConfirmDeleteScreen(
                 it,
-                topBarTitle = null,
-                mainText = "Delete category ${category.name}?",
+                mainText = "Delete list ${category.name}?",
                 detail = "Deleting moves open tasks to Inbox",
             )
         }) { deleted ->

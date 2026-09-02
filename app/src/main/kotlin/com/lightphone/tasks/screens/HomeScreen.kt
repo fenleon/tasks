@@ -3,6 +3,7 @@ package com.lightphone.tasks.screens
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -24,7 +26,11 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewModelScope
 import com.lightphone.tasks.server.Category
@@ -48,11 +54,18 @@ import com.thelightphone.sdk.ui.LightTopBar
 import com.thelightphone.sdk.ui.LightTopBarCenter
 import com.thelightphone.sdk.ui.gridUnitsAsDp
 import com.thelightphone.sdk.ui.lightClickable
+import com.thelightphone.sdk.ui.scaledForScreenHeight
 import java.time.LocalDate
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
 class HomeViewModel : LightViewModel<Unit>() {
+
+    /** How long a just-checked-off task stays visible, crossed out, before the
+     *  view hides it (feedback 2026-09-02: "a few minutes"). */
+    private val doneHideDelayMs = 3 * 60 * 1000L
 
     /** The active view's key (feedback 1/7/12): the main panel shows exactly
      *  this view's tasks, its name in the top bar. */
@@ -68,11 +81,15 @@ class HomeViewModel : LightViewModel<Unit>() {
     val categories = MutableStateFlow<List<Category>>(emptyList())
 
     /** Tasks marked done in the current view that stay visible (struck
-     *  through) until the user leaves the panel — feedback 2026-08-26:
-     *  "the completed task should remain and show marked off even if SHOW
-     *  COMPLETED is turned off, until you go to another panel". Cleared by
+     *  through) for [doneHideDelayMs] before the row disappears (feedback
+     *  2026-08-26: a completed task remained until you left the panel —
+     *  2026-09-02: now a few minutes, so the crossed-out state reads). Each
+     *  id's hide timer is cancelled if the task is unchecked again; cleared by
      *  [select]. */
     val recentlyDone = MutableStateFlow<Set<String>>(emptySet())
+
+    /** Per-task hide timers for [recentlyDone] rows. */
+    private val doneHideTimers = mutableMapOf<String, Job>()
 
     /** Planned's DUE TODAY filter (feedback 2026-08-26): when set, only tasks
      *  due today show; the bottom-bar button reads VIEW ALL. Reset by
@@ -89,13 +106,12 @@ class HomeViewModel : LightViewModel<Unit>() {
         kotlinx.coroutines.flow.combine(
             TaskRepository.tasks,
             TaskRepository.categories,
-            TaskRepository.showCompletedFlow,
             selectedKey,
             recentlyDone,
-        ) { _, cats, showCompleted, key, keep ->
+        ) { _, cats, key, keep ->
             categories.value = cats
             context.value = contextFor(key, cats)
-            tasks.value = TaskRepository.tasksForContext(key, showCompleted[key] ?: false, keep)
+            tasks.value = TaskRepository.tasksForContext(key, keep)
         }.collect { }
     }
 
@@ -112,15 +128,24 @@ class HomeViewModel : LightViewModel<Unit>() {
     fun select(key: String) {
         selectedKey.value = key
         recentlyDone.value = emptySet()
+        doneHideTimers.values.forEach { it.cancel() }
+        doneHideTimers.clear()
         dueTodayOnly.value = false
     }
 
     fun setDone(task: Task, done: Boolean) {
         TaskRepository.setDone(task.id, done)
-        recentlyDone.value = if (done) {
-            recentlyDone.value + task.id
+        if (done) {
+            recentlyDone.value = recentlyDone.value + task.id
+            doneHideTimers.remove(task.id)?.cancel()
+            doneHideTimers[task.id] = viewModelScope.launch {
+                delay(doneHideDelayMs)
+                recentlyDone.value = recentlyDone.value - task.id
+                doneHideTimers.remove(task.id)
+            }
         } else {
-            recentlyDone.value - task.id
+            recentlyDone.value = recentlyDone.value - task.id
+            doneHideTimers.remove(task.id)?.cancel()
         }
     }
 
@@ -160,18 +185,10 @@ class HomeScreen(sealedActivity: SealedLightActivity) :
                 // 2026-08-26: no title select in All/Inbox/Planned/Completed);
                 // a stored category's title opens the rename editor directly
                 // (the old category menu — MARK ALL / SHOW COMPLETED / delete —
-                // is gone; delete moved to the categories panel's EDIT).
-                // Any view but Inbox shows a back arrow that returns to Inbox.
+                // is gone; delete moved to the lists panel's EDIT). No back
+                // arrow (feedback 2026-09-02: the Lists panel is the only way
+                // to switch views).
                 LightTopBar(
-                    leftButton = if (context.key == TaskRepository.KEY_INBOX) {
-                        null
-                    } else {
-                        LightBarButton.LightIcon(
-                            icon = LightIcons.BACK,
-                            onClick = { viewModel.select(TaskRepository.KEY_INBOX) },
-                            contentDescription = "Back to Inbox",
-                        )
-                    },
                     center = LightTopBarCenter.Text(
                         text = context.name,
                         onClick = if (context.isBuiltIn) null else ({ renameCategory(context) }),
@@ -191,20 +208,25 @@ class HomeScreen(sealedActivity: SealedLightActivity) :
                     } else {
                         LightScrollView {
                             when {
-                                context == TaskContext.ALL || context == TaskContext.COMPLETED -> CategorySections(
-                                    allTasks = shown,
+                                context == TaskContext.PLANNED -> PlannedSections(
+                                    tasks = shown,
                                     categories = categories,
                                     onEdit = { openTask(it) },
                                     onToggleDone = { task, done -> viewModel.setDone(task, done) },
                                 )
-                                context == TaskContext.PLANNED -> PlannedSections(
-                                    tasks = shown,
-                                    onEdit = { openTask(it) },
-                                    onToggleDone = { task, done -> viewModel.setDone(task, done) },
-                                )
                                 else -> shown.forEach { task ->
+                                    // All and Completed (feedback 2026-09-02)
+                                    // are flat lists whose rows carry the
+                                    // "{category}, {date}" line — the group
+                                    // headers are gone with the completed rows.
+                                    val meta = if (context == TaskContext.ALL || context == TaskContext.COMPLETED) {
+                                        rowMeta(task, categories)
+                                    } else {
+                                        null
+                                    }
                                     TaskRow(
                                         task = task,
+                                        meta = meta,
                                         onToggle = { viewModel.setDone(task, !task.done) },
                                         onClick = { openTask(task) },
                                     )
@@ -213,9 +235,9 @@ class HomeScreen(sealedActivity: SealedLightActivity) :
                         }
                     }
                 }
-                // Per-view bottom bar (feedback 2026-08-26): Categories left,
-                // the new-task note icon bottom right — except Completed, which
-                // is read-only (no create, no middle button). Planned's middle
+                // Per-view bottom bar (feedback 2026-08-26): Lists left, the
+                // new-task note icon bottom right — except Completed, which is
+                // read-only (no create, no middle button). Planned's middle
                 // button toggles the DUE TODAY filter.
                 LightBottomBar(
                     modifier = Modifier.navigationBarsPadding(),
@@ -224,7 +246,7 @@ class HomeScreen(sealedActivity: SealedLightActivity) :
                             LightBarButton.LightIcon(
                                 icon = LightIcons.LIST,
                                 onClick = { openCategories() },
-                                contentDescription = "Categories",
+                                contentDescription = "Lists",
                             ),
                         )
                         if (context.key == TaskRepository.KEY_PLANNED) {
@@ -272,14 +294,13 @@ class HomeScreen(sealedActivity: SealedLightActivity) :
         }
     }
 
-    /** A stored category's title opens the LP3 keyboard to rename it — the
-     *  whole old category menu collapsed into a direct rename (feedback
-     *  2026-08-26). */
+    /** A stored list's title opens the LP3 keyboard to rename it — the whole
+     *  old category menu collapsed into a direct rename (feedback 2026-08-26). */
     private fun renameCategory(context: TaskContext) {
         navigateTo(screenFactory = {
             TitleEditorScreen(
                 it,
-                title = "Edit Category",
+                title = "Edit List",
                 initial = TaskRepository.getCategory(context.key)?.name ?: context.name,
             )
         }) { value ->
@@ -290,55 +311,26 @@ class HomeScreen(sealedActivity: SealedLightActivity) :
     }
 }
 
-/** Category-grouped sections — the "All" view (every task) and the
- *  "Completed" view (done tasks only, feedback 2026-08-26: completed rows
- *  separated by category like in All): each category's tasks under a small
- *  top header, categories in panel order (inbox first, then stored categories
- *  alphabetically — feedback 20/11). Within a group the rows keep the global
- *  order (due asc, alpha, done last). */
-@Composable
-private fun CategorySections(
-    allTasks: List<Task>,
-    categories: List<Category>,
-    onEdit: (Task) -> Unit,
-    onToggleDone: (Task, Boolean) -> Unit,
-) {
-    Column(modifier = Modifier.padding(bottom = 1f.gridUnitsAsDp())) {
-        val byCategory = allTasks.groupBy { it.categoryId }
-        @Composable
-        fun section(header: String, tasks: List<Task>) {
-            if (tasks.isNotEmpty()) {
-                LightText(
-                    text = header,
-                    variant = LightTextVariant.Superfine,
-                    modifier = Modifier.padding(
-                        horizontal = 2f.gridUnitsAsDp(),
-                        vertical = 0.75f.gridUnitsAsDp(),
-                    ),
-                )
-                tasks.forEach { task ->
-                    TaskRow(
-                        task = task,
-                        onToggle = { onToggleDone(task, !task.done) },
-                        onClick = { onEdit(task) },
-                    )
-                }
-            }
-        }
-        section("Inbox", byCategory[null].orEmpty())
-        categories.sortedBy { it.name.lowercase() }.forEach { category ->
-            section(category.name, byCategory[category.id].orEmpty())
-        }
-    }
+/** The row's "{category}, {date}" subtitle (feedback 2026-09-02) — shown on
+ *  the All, Planned and Completed panels, where the rows carry their list:
+ *  "Inbox", "Errands", or "Errands, Sep 3, 14:30" when the task has a due.
+ *  (Inbox and single-list views skip it — the list is already the context.) */
+private fun rowMeta(task: Task, categories: List<Category>): String {
+    val name = task.categoryId?.let { id -> categories.firstOrNull { it.id == id }?.name }
+        ?: "Inbox"
+    val due = task.dueAt?.let { TaskFormat.formatDue(it) }
+    return if (due != null) "$name, $due" else name
 }
 
 /** The "Planned" view (feedback 2026-08-26): tasks with a due date divided
- *  under the topline headers Overdue / Due Today / Upcoming, like the All
- *  view's category groups. When the DUE TODAY filter is on, [tasks] already
- *  holds only today's tasks, so just the "Due Today" section renders. */
+ *  under the topline headers Overdue / Due Today / Upcoming; each row's
+ *  subtitle is "{category}, {date}" (feedback 2026-09-02). When the DUE TODAY
+ *  filter is on, [tasks] already holds only today's tasks, so just the
+ *  "Due Today" section renders. */
 @Composable
 private fun PlannedSections(
     tasks: List<Task>,
+    categories: List<Category>,
     onEdit: (Task) -> Unit,
     onToggleDone: (Task, Boolean) -> Unit,
 ) {
@@ -359,6 +351,7 @@ private fun PlannedSections(
                 tasks.forEach { task ->
                     TaskRow(
                         task = task,
+                        meta = rowMeta(task, categories),
                         onToggle = { onToggleDone(task, !task.done) },
                         onClick = { onEdit(task) },
                     )
@@ -393,12 +386,15 @@ private fun EmptyState(text: String) {
 }
 
 /** One task row: leading check affordance (drawn outline square → filled ✓),
- *  Heading title, Superfine due line ("[Date], [Time]" — feedback 19). Tap the
- *  check toggles done; tap the body opens the editor. Done rows are struck
- *  through; all text is the full content color (feedback 9). */
+ *  Heading title, then a Superfine subtitle line — [meta] when the panel
+ *  passes one ("{category}, {date}", feedback 2026-09-02), else the task's
+ *  "[Date], [Time]" due (feedback 19). Tap the check toggles done; tap the
+ *  body opens the editor. Done rows are struck through; all text is the full
+ *  content color (feedback 9). */
 @Composable
 private fun TaskRow(
     task: Task,
+    meta: String? = null,
     onToggle: () -> Unit,
     onClick: () -> Unit,
 ) {
@@ -415,18 +411,72 @@ private fun TaskRow(
                 .weight(1f)
                 .lightClickable(onClick = onClick),
         ) {
-            LightText(
-                text = task.title,
-                variant = LightTextVariant.Heading,
-                maxLines = 1,
-                modifier = if (task.done) Modifier.strikeThrough() else Modifier,
-            )
-            task.dueAt?.let {
+            TaskTitle(task)
+            val subtitle = meta ?: task.dueAt?.let { TaskFormat.formatDue(it) }
+            subtitle?.let {
                 LightText(
-                    text = TaskFormat.formatDue(it),
+                    text = it,
                     variant = LightTextVariant.Superfine,
                 )
             }
+        }
+    }
+}
+
+/** Titles wrap at most two lines, then ellipsize (feedback 2026-09-02: they
+ *  used to clip mid-word on the first line — "Drop off library books" cut off
+ *  at "library"). Done rows are struck through — one 2dp line per rendered
+ *  text line, at the 16b position (62% down the line), each overshooting the
+ *  last letter by about one letter width (feedback 12). The strike is drawn
+ *  behind the text on the title's wrapper box, from the same layout the text
+ *  renders with, so a wrapped title is crossed line by line. */
+@Composable
+private fun TaskTitle(task: Task) {
+    val maxTitleLines = 2
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val textMeasurer = rememberTextMeasurer()
+        val style = LightThemeTokens.typography.heading.scaledForScreenHeight()
+        val maxWidthPx = constraints.maxWidth
+        val strikeLayout = remember(task.title, style, maxWidthPx, task.done) {
+            if (task.done) {
+                textMeasurer.measure(
+                    text = AnnotatedString(task.title),
+                    style = style,
+                    overflow = TextOverflow.Ellipsis,
+                    maxLines = maxTitleLines,
+                    constraints = Constraints(maxWidth = maxWidthPx),
+                )
+            } else {
+                null
+            }
+        }
+        val content = LightThemeTokens.colors.content
+        Box(
+            modifier = Modifier.drawBehind {
+                strikeLayout?.let { layout ->
+                    val stroke = 2.dp.toPx()
+                    // ~ one letter width past the last letter (feedback 12).
+                    val overshoot = style.fontSize.toPx() * 0.5f
+                    repeat(layout.lineCount) { line ->
+                        val top = layout.getLineTop(line)
+                        val bottom = layout.getLineBottom(line)
+                        val y = top + (bottom - top) * 0.62f
+                        drawLine(
+                            color = content,
+                            start = Offset(0f, y),
+                            end = Offset(layout.getLineRight(line) + overshoot, y),
+                            strokeWidth = stroke,
+                        )
+                    }
+                }
+            },
+        ) {
+            LightText(
+                text = task.title,
+                variant = LightTextVariant.Heading,
+                maxLines = maxTitleLines,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
@@ -477,22 +527,5 @@ private fun TaskCheckBox(
                 )
             }
         }
-    }
-}
-
-/** A monochrome strikethrough for done rows — drawn just below the text's
- *  middle at the input-underline thickness (2dp — feedback 2026-08-26). */
-@Composable
-private fun Modifier.strikeThrough(): Modifier {
-    val density = LocalDensity.current
-    val stroke = with(density) { 2.dp.toPx() }
-    val color = LightThemeTokens.colors.content
-    return drawBehind {
-        drawLine(
-            color = color,
-            start = Offset(0f, size.height * 0.62f),
-            end = Offset(size.width, size.height * 0.62f),
-            strokeWidth = stroke,
-        )
     }
 }

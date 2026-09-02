@@ -22,6 +22,8 @@ object TaskFormat {
     private val DAY_YEAR = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.US)
     private val TIME = DateTimeFormatter.ofPattern("HH:mm", Locale.US)
     private val MONTH_TITLE = DateTimeFormatter.ofPattern("MMMM yyyy", Locale.US)
+    private val WEEKDAY = DateTimeFormatter.ofPattern("EEEE", Locale.US)
+    private val FULL_DATE = DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.US)
     private val DETAILS_DATE = DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy", Locale.US)
 
     /** "Aug 25" (current year) / "Aug 25, 2027", + ", 14:30" when a time is set
@@ -44,14 +46,30 @@ object TaskFormat {
     /** "14:30" — the due screen's picked-time display. */
     fun formatTime(time: LocalTime): String = TIME.format(time)
 
-    /** "Monday, August 24, 2026" (+ ", 14:30" when a time is set) — the
-     *  details screen's date line (feedback 2026-08-26). */
-    fun formatDetails(dueAt: Long?): String {
+    /** The details screen's due lines (feedback 2026-09-02): a due with a time
+     *  splits so the weekday sits inline with the time on the first line
+     *  ("Thursday, 14:30") and the full date gets its own line beneath
+     *  ("September 3, 2026") — the old single long line wrapped awkwardly.
+     *  A date-only due keeps the single "Thursday, September 3, 2026" line.
+     *  Returns null when there is no time; show [formatDetailsDate] on its
+     *  own then. */
+    fun formatDetailsDayTime(dueAt: Long?): String? {
+        if (dueAt == null) return null
+        val time = timeOfDay(dueAt) ?: return null
+        val zoned = Instant.ofEpochMilli(dueAt).atZone(zone)
+        return "${WEEKDAY.format(zoned)}, ${TIME.format(time)}"
+    }
+
+    /** "September 3, 2026" — or "Thursday, September 3, 2026" when the due is
+     *  date-only (no time, so no separate weekday line above). */
+    fun formatDetailsDate(dueAt: Long?): String {
         if (dueAt == null) return ""
         val zoned = Instant.ofEpochMilli(dueAt).atZone(zone)
-        val date = DETAILS_DATE.format(zoned)
-        val time = timeOfDay(dueAt)?.let { TIME.format(it) }
-        return if (time != null) "$date, $time" else date
+        return if (timeOfDay(dueAt) == null) {
+            DETAILS_DATE.format(zoned)
+        } else {
+            FULL_DATE.format(zoned)
+        }
     }
 
     /** Date-only epoch (local midnight of the day). */

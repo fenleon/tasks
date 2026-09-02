@@ -17,39 +17,27 @@ import com.thelightphone.sdk.SealedLightActivity
 import com.thelightphone.sdk.SimpleLightScreen
 import com.thelightphone.sdk.ui.LightBarButton
 import com.thelightphone.sdk.ui.LightBottomBar
-import com.thelightphone.sdk.ui.LightIcons
 import com.thelightphone.sdk.ui.LightText
 import com.thelightphone.sdk.ui.LightTextVariant
 import com.thelightphone.sdk.ui.LightTheme
 import com.thelightphone.sdk.ui.LightThemeController
 import com.thelightphone.sdk.ui.LightThemeTokens
-import com.thelightphone.sdk.ui.LightTopBar
-import com.thelightphone.sdk.ui.LightTopBarCenter
 import com.thelightphone.sdk.ui.gridUnitsAsDp
 
 /**
  * The confirm-action screen (a dedicated pushed screen, never a modal — the
- * audiobooks RemoveBook-style house pattern). Two layouts, feedback
- * 2026-08-26:
- *
- * - **Category delete** — [topBarTitle] null: no top bar; the main text
- *   "Delete category [name]?" with a smaller white detail line; bottom bar
- *   CANCEL left · DELETE right.
- * - **Task delete** — [topBarTitle] set (the task's title): back + title in
- *   the top bar; the main text "Are you sure you'd like to delete this
- *   task?"; a single centered [confirmText] (CONFIRM) in the bottom bar.
+ * audiobooks RemoveBook-style house pattern). Only the **list delete** layout
+ * remains (feedback 2026-09-02: task deletion no longer confirms): no top
+ * bar; the main text "Delete list [name]?" with a smaller white detail line;
+ * bottom bar CANCEL left · DELETE right.
  *
  * All text is the full content color (white). Result: `true` on confirm —
  * callers act on `confirmed == true` only; back / X cancels.
  */
 class ConfirmDeleteScreen(
     sealedActivity: SealedLightActivity,
-    private val topBarTitle: String?,
     private val mainText: String,
     private val detail: String? = null,
-    private val cancelText: String? = "CANCEL",
-    private val confirmText: String = "DELETE",
-    private val confirmCentered: Boolean = false,
 ) : SimpleLightScreen<Boolean>(sealedActivity) {
 
     @Composable
@@ -62,16 +50,6 @@ class ConfirmDeleteScreen(
                     .fillMaxSize()
                     .background(LightThemeTokens.colors.background),
             ) {
-                if (topBarTitle != null) {
-                    LightTopBar(
-                        leftButton = LightBarButton.LightIcon(
-                            icon = LightIcons.BACK,
-                            onClick = { goBack() },
-                            contentDescription = "Back",
-                        ),
-                        center = LightTopBarCenter.Text(text = topBarTitle),
-                    )
-                }
                 Box(modifier = Modifier.weight(1f)) {
                     Column(
                         modifier = Modifier
@@ -96,19 +74,9 @@ class ConfirmDeleteScreen(
                 LightBottomBar(
                     modifier = Modifier.navigationBarsPadding(),
                     items = listOf(
-                        cancelText?.let {
-                            LightBarButton.Text(text = it, onClick = { goBack() })
-                        },
-                        if (confirmCentered) {
-                            LightBarButton.Text(text = confirmText, onClick = { goBack(true) })
-                        } else {
-                            null
-                        },
-                        if (confirmCentered) {
-                            null
-                        } else {
-                            LightBarButton.Text(text = confirmText, onClick = { goBack(true) })
-                        },
+                        LightBarButton.Text(text = "CANCEL", onClick = { goBack() }),
+                        null,
+                        LightBarButton.Text(text = "DELETE", onClick = { goBack(true) }),
                     ),
                 )
             }
