@@ -1,0 +1,10 @@
+[tool]
+id = "com.lightphone.tasks"
+label = "Tasks"
+versionCode = 1
+versionName = "0.1.0"
+# Single-APK build: the merged :server library hosts the SDK server wiring
+# (ServerBootstrapProvider) inside this APK; the tool binds to itself —
+# serverPackage is the tool's own id, so no separate companion APK to install.
+serverPackage = "com.lightphone.tasks"
+orientation = "portrait"
