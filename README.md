@@ -12,7 +12,8 @@ Tasks is in **beta**. It is suitable for daily use; features and behavior may st
 >
 > **Current Version:** 0.2.0
 
-**About the name:** the app is called *Tasks* — a plain, descriptive name in the Light Phone tool-naming style. Application ID: `com.lightphone.tasks`.
+<p align="center">Support my work by leaving me a <a href="https://ko-fi.com/fenleon">tip</a> or  <a href=https://github.com/sponsors/fenleon">sponsoring me</a>. A little goes a long way.</p>
+
 
 ---
 
