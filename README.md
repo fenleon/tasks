@@ -2,6 +2,11 @@
 
 *A calm, local-first to-do list for the Light Phone III.*
 
+<p align="center"><a href="https://ko-fi.com/fenleon">
+  <picture><source media="(prefers-color-scheme: dark)" srcset="art/coffee-hand-filled-alpha-white-steam.png"><img src="art/coffee-hand-filled-alpha-white.png" alt="Hand holding Coffee" height="50" style="vertical-align: middle;"></picture>
+  <picture><source media="(prefers-color-scheme: dark)" srcset="art/buy-me-a-coffee-alpha-white.png"><img src="art/buy-me-a-coffee-alpha-black.png" alt="Buy Me A Coffee" height="40" style="vertical-align: middle;"></picture>
+  <img src="art/ok-hand-filled-alpha-white.png" alt="OK Hand" height="50" style="vertical-align: middle;"></a></p>
+
 Tasks is a task list built specifically for the Light Phone III. Add tasks, file them into categories, check them off, and optionally set a due date and time — nothing more. There are no accounts, tags, subtasks, projects, widgets, or cloud backends. Everything lives in one small file on your device.
 
 Built with the Light ethos: **stripped back, calm, and intentionally small**. Tasks is a **real LightOS tool**: a thin interface built on the Light SDK design system, launched from the LightOS toolbox, with **zero permissions**.
@@ -129,3 +134,5 @@ Other trademarks are the property of their respective owners and are used solely
 Tasks is licensed under the MIT License.
 
 See [LICENSE](LICENSE) for the complete license text.
+
+<p align="center">Support my work by leaving me a <a href="https://ko-fi.com/fenleon">tip</a> or <a href="https://github.com/sponsors/fenleon">sponsoring me</a>. A little goes a long way.</p>
