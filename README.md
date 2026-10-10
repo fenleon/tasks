@@ -59,7 +59,7 @@ On the emulator: `adb install -r app-release.apk` is all it takes — the emulat
 
 # Development
 
-Tasks is a standalone Gradle project (modules `:app` and `:server`) that consumes the Light SDK as an included build.
+Tasks is a standalone single-module Gradle project (`:tool`) that consumes the Light SDK as an included build.
 
 ## Requirements
 
@@ -70,9 +70,9 @@ Tasks is a standalone Gradle project (modules `:app` and `:server`) that consume
 ## Build
 
 ```bash
-./gradlew :app:assembleDebug        # debug APK
-./gradlew :app:assembleRelease      # R8-minified release APK
-./gradlew :server:testDebugUnitTest # server unit tests
+./gradlew :tool:assembleDebug        # debug APK
+./gradlew :tool:assembleRelease      # R8-minified release APK
+./gradlew :tool:testDebugUnitTest    # unit tests
 ```
 
 The release variant signs with the workspace dev key (`light-sdk/sdk/keys/lightsdk-dev.jks`) — sideloadable, treated as Light-signed by the LightOS emulator. See the repository's build files for details.
@@ -89,7 +89,7 @@ Tasks does not include analytics, advertising, telemetry, or user accounts. It h
 
 Tasks is a native Android application written in Kotlin using Jetpack Compose.
 
-It is a **real LightOS tool**: the `:app` module is built with the Light SDK's tool plugin and uses only SDK primitives and UI. The former `:server` companion is merged into the same APK as an Android library — it hosts the SDK's `LightSdkService` the tool binds to (the tool binds to itself, so there is exactly one APK to install) and relays the hardware keys and haptics setting the tool doesn't use to LightOS. The task store runs in-process: `TaskRepository` keeps an in-memory copy and write-through JSON at `tasks.json` in the tool's sandboxed files. Tasks is a standalone Gradle project that consumes the Light SDK as an included build — see `settings.gradle.kts`.
+It is a **real LightOS tool**: the `:tool` module is built with the Light SDK's tool plugin and uses only SDK primitives and UI. Single-module build (the passes pattern): no embedded server — `serverPackage = "com.lightos"`, so all SDK server calls go to the platform's own `LightSdkService` (hardware keys and haptics included). The task store runs in-process: `TaskRepository` keeps an in-memory copy and write-through JSON at `tasks.json` in the tool's sandboxed files. Tasks is a standalone Gradle project that consumes the Light SDK as an included build — see `settings.gradle.kts`.
 
 ---
 

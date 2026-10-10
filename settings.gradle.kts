@@ -22,16 +22,12 @@ dependencyResolutionManagement {
 
 rootProject.name = "tasks"
 
-include(":app")
-include(":server")
+include(":tool")
 
-// Tasks is a single-APK project (the audiobooks/chats pattern): `:app` is the
-// real LightOS tool (lighttool.toml + the light-sdk tool plugin, LightScreen
-// UI, task repository in-process); `:server` is the merged companion as an
-// Android LIBRARY whose manifest contributes the SDK server wiring
-// (ServerBootstrapProvider) and whose LightSdkService (from sdk:server) the
-// tool binds to — serverPackage = com.lightphone.tasks (self-hosted). Both
-// consume the SDK as an included build.
+// Tasks is a single-module tool (the passes pattern): `:tool` is the real
+// LightOS tool (lighttool.toml + the light-sdk tool plugin, LightScreen UI,
+// TaskRepository in-process). No embedded server — serverPackage = com.lightos
+// (the platform hosts the LightSdkService). Consumes the SDK as an included build.
 includeBuild("../light-sdk") {
     dependencySubstitution {
         substitute(module("com.thelightphone:sdk-ui")).using(project(":sdk:ui"))

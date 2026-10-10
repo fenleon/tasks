@@ -1,0 +1,11 @@
+[tool]
+id = "com.lightphone.tasks"
+label = "Tasks"
+versionCode = 2
+versionName = "0.2.0"
+# Single-module tool (the passes pattern): no embedded server — all SDK server
+# calls (permissions, key forwarding) go to the platform's own service:
+# com.lightos on a real LP3. The emulator's LightOS server is
+# com.thelightphone.sdk.emulator — flip to that when testing there.
+serverPackage = "com.lightos"
+orientation = "portrait"
