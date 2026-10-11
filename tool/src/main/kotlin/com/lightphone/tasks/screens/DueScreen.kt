@@ -25,6 +25,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import com.lightphone.tasks.server.TaskFormat
 import com.thelightphone.sdk.SealedLightActivity
@@ -88,7 +90,30 @@ class DueScreen(
                     ),
                 )
 
-                Box(modifier = Modifier.weight(1f)) {
+                // Swipe left/right moves a month (the < > buttons stay for
+                // discoverability); taps pass through — only drags past the
+                // ~quarter-bar threshold switch months.
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .pointerInput(Unit) {
+                            var drag = 0f
+                            val threshold = 80.dp.toPx()
+                            detectHorizontalDragGestures(
+                                onDragStart = { drag = 0f },
+                                onHorizontalDrag = { change, amount ->
+                                    drag += amount
+                                    change.consume()
+                                },
+                                onDragEnd = {
+                                    when {
+                                        drag <= -threshold -> month = month.plusMonths(1)
+                                        drag >= threshold -> month = month.minusMonths(1)
+                                    }
+                                },
+                            )
+                        },
+                ) {
                     LightScrollView {
                         MonthGrid(
                             month = month,

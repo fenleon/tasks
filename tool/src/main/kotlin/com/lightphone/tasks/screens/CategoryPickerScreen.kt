@@ -62,7 +62,7 @@ class CategoryPickerScreen(
                     ),
                     center = LightTopBarCenter.Text(text = "List"),
                 )
-                Box(modifier = Modifier.weight(1f)) {
+                Box(modifier = Modifier.weight(1f).navigationBarsPadding()) {
                     LightScrollView {
                         PickerRow(
                             text = "Inbox",
@@ -78,17 +78,6 @@ class CategoryPickerScreen(
                         }
                     }
                 }
-                LightBottomBar(
-                    modifier = Modifier.navigationBarsPadding(),
-                    items = listOf(
-                        null,
-                        LightBarButton.Text(
-                            text = "CANCEL",
-                            onClick = { goBack() },
-                        ),
-                        null,
-                    ),
-                )
             }
         }
     }

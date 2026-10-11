@@ -17,7 +17,6 @@ import com.thelightphone.sdk.ui.LightTextInputEditor
 import com.thelightphone.sdk.ui.LightTheme
 import com.thelightphone.sdk.ui.LightThemeController
 import com.thelightphone.sdk.ui.LightThemeTokens
-import com.thelightphone.sdk.ui.scaledForScreenHeight
 import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
@@ -55,9 +54,6 @@ class TitleEditorScreen(
                 ),
             )
         }
-        val inputStyle = LightThemeTokens.typography.heading
-            .copy(color = LightThemeTokens.colors.content)
-            .scaledForScreenHeight()
         val textState = rememberTextFieldState(initial)
 
         LightTheme(colors = themeColors) {
@@ -65,18 +61,21 @@ class TitleEditorScreen(
                 title = title,
                 state = textState,
                 keyboardOptionsFlow = keyboardOptionsFlow,
-                onSubmit = { result -> goBack(result.toString().trim()) },
+                onSubmit = if (clearBar) {
+                    // The X is the submit control (center slot): close
+                    // without saving. SAVE is a plain right bar item.
+                    { goBack() }
+                } else {
+                    { result -> goBack(result.toString().trim()) }
+                },
                 onBack = { goBack() },
                 modifier = Modifier.background(LightThemeTokens.colors.background),
-                submitLabel = "SAVE",
-                bottomAligned = false,
-                centered = true,
+                submitLabel = if (clearBar) "Close without saving" else "SAVE",
+                submitIcon = if (clearBar) LightIcons.CLOSE else null,
                 singleLine = singleLine,
                 initialCaps = false,
-                inputTextStyle = inputStyle,
                 showBackButton = !clearBar,
-                submitBottomRight = clearBar,
-                bottomBarLeadingButton = if (clearBar) {
+                leftBottomBarItem = if (clearBar) {
                     LightBarButton.Text(
                         text = "CLEAR",
                         onClick = { goBack("") },
@@ -84,11 +83,10 @@ class TitleEditorScreen(
                 } else {
                     null
                 },
-                bottomBarCenterButton = if (clearBar) {
-                    LightBarButton.LightIcon(
-                        icon = LightIcons.CLOSE,
-                        onClick = { goBack() },
-                        contentDescription = "Close without saving",
+                rightBottomBarItem = if (clearBar) {
+                    LightBarButton.Text(
+                        text = "SAVE",
+                        onClick = { goBack(textState.text.toString().trim()) },
                     )
                 } else {
                     null

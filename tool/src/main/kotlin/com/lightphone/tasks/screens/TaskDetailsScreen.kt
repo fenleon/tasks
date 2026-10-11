@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.lightphone.tasks.server.TaskFormat
 import com.lightphone.tasks.server.TaskRepository
@@ -60,21 +61,25 @@ class TaskDetailsScreen(
                     .fillMaxSize()
                     .background(LightThemeTokens.colors.background),
             ) {
-                LightTopBar(
-                    leftButton = LightBarButton.LightIcon(
-                        icon = LightIcons.BACK,
-                        onClick = { goBack() },
-                        contentDescription = "Back",
-                    ),
-                    // No center title — the task name is the content heading
-                    // (feedback 2026-08-26), so the bar is just back + EDIT.
-                    center = null,
-                    textVariant = LightTextVariant.Button,
-                    rightButton = LightBarButton.Text(
+                Box {
+                    LightTopBar(
+                        leftButton = LightBarButton.LightIcon(
+                            icon = LightIcons.BACK,
+                            onClick = { goBack() },
+                            contentDescription = "Back",
+                        ),
+                        // No center title — the task name is the content
+                        // heading (feedback 2026-08-26), so the bar is just
+                        // back + EDIT.
+                    )
+                    TopBarTextButton(
                         text = "EDIT",
                         onClick = { openEdit() },
-                    ),
-                )
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .padding(end = 1f.gridUnitsAsDp()),
+                    )
+                }
                 Box(modifier = Modifier.weight(1f)) {
                     if (task != null) {
                         LightScrollView {

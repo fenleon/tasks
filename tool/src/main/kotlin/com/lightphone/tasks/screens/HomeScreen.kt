@@ -27,11 +27,13 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.isUnspecified
 import androidx.lifecycle.viewModelScope
 import com.lightphone.tasks.server.Category
 import com.lightphone.tasks.server.Task
@@ -50,11 +52,11 @@ import com.thelightphone.sdk.ui.LightTextVariant
 import com.thelightphone.sdk.ui.LightTheme
 import com.thelightphone.sdk.ui.LightThemeController
 import com.thelightphone.sdk.ui.LightThemeTokens
+import com.thelightphone.sdk.ui.designVerticalPxToSp
 import com.thelightphone.sdk.ui.LightTopBar
 import com.thelightphone.sdk.ui.LightTopBarCenter
 import com.thelightphone.sdk.ui.gridUnitsAsDp
 import com.thelightphone.sdk.ui.lightClickable
-import com.thelightphone.sdk.ui.scaledForScreenHeight
 import java.time.LocalDate
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -459,6 +461,18 @@ private fun TaskRow(
  *  last letter by about one letter width (feedback 12). The strike is drawn
  *  behind the text on the title's wrapper box, from the same layout the text
  *  renders with, so a wrapped title is crossed line by line. */
+/** SDK's `scaledForScreenHeight` is internal upstream — same math via the
+ *  public `designVerticalPxToSp` (screen-height-proportional sp, 600 px base).
+ *  Unspecified units must pass through untouched: their `.value` is NaN, and a
+ *  NaN letterSpacing poisons the measured layout (the drawn strike's
+ *  lineRight goes NaN → the strike silently vanishes). */
+@Composable
+private fun TextStyle.scaledForScreenHeight(): TextStyle = copy(
+    fontSize = if (fontSize.isUnspecified) fontSize else fontSize.value.designVerticalPxToSp(),
+    lineHeight = if (lineHeight.isUnspecified) lineHeight else lineHeight.value.designVerticalPxToSp(),
+    letterSpacing = if (letterSpacing.isUnspecified) letterSpacing else letterSpacing.value.designVerticalPxToSp(),
+)
+
 @Composable
 private fun TaskTitle(task: Task) {
     val maxTitleLines = 2

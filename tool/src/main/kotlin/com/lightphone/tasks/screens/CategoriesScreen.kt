@@ -76,21 +76,23 @@ class CategoriesScreen(
                     .fillMaxSize()
                     .background(LightThemeTokens.colors.background),
             ) {
-                LightTopBar(
-                    leftButton = LightBarButton.LightIcon(
-                        icon = LightIcons.BACK,
-                        onClick = { goBack() },
-                        contentDescription = "Back",
-                    ),
-                    center = LightTopBarCenter.Text(text = "Lists"),
-                    // EDIT/DONE sized like the bottom-bar text buttons
-                    // (feedback 2026-08-26).
-                    textVariant = LightTextVariant.Button,
-                    rightButton = LightBarButton.Text(
+                Box {
+                    LightTopBar(
+                        leftButton = LightBarButton.LightIcon(
+                            icon = LightIcons.BACK,
+                            onClick = { goBack() },
+                            contentDescription = "Back",
+                        ),
+                        center = LightTopBarCenter.Text(text = "Lists"),
+                    )
+                    TopBarTextButton(
                         text = if (editMode) "DONE" else "EDIT",
                         onClick = { editMode = !editMode },
-                    ),
-                )
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .padding(end = 1f.gridUnitsAsDp()),
+                    )
+                }
                 Box(modifier = Modifier.weight(1f)) {
                     LightScrollView {
                         if (editMode) {
