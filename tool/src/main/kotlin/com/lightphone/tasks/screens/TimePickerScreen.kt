@@ -42,7 +42,7 @@ import java.time.LocalTime
 import kotlin.math.roundToInt
 
 /**
- * Pick a task's start time — the edit screen's "Start time" row destination
+ * Pick a task's start time — the edit screen's "Start Time" row destination
  * (feedback 15): scrollable HOUR / MIN columns (24-hour, tap to select, the
  * selected value underlined — the passes recipe). No top-bar navigation — just
  * the centered title — and the bottom bar is CLEAR · X · SAVE (feedback
@@ -68,7 +68,7 @@ class TimePickerScreen(
                     .background(LightThemeTokens.colors.background),
             ) {
                 LightTopBar(
-                    center = LightTopBarCenter.Text(text = "Start time"),
+                    center = LightTopBarCenter.Text(text = "Start Time"),
                 )
                 // HOUR / MIN each fill half the width and the full height
                 // between the bars, so the scrollable values run down to the

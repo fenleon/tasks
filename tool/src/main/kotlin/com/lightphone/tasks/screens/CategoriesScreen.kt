@@ -16,6 +16,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.unit.dp
 import com.lightphone.tasks.server.Category
 import com.lightphone.tasks.server.Task
 import com.lightphone.tasks.server.TaskRepository
@@ -37,27 +44,26 @@ import com.thelightphone.sdk.ui.gridUnitsAsDp
 import com.thelightphone.sdk.ui.lightClickable
 
 /**
- * The lists panel (feedback 2026-09-02: the categories panel was renamed):
- * a selection screen (feedback 7) — tapping a row picks that view as the main
- * context and returns. Rows are the four built-ins (All, Inbox, Planned,
- * Completed) then stored lists alphabetically (feedback 11); the currently
- * selected view is underlined (feedback 10), and each row shows its **open**
- * task count (feedback 2026-08-26: only what's not done) near the scrollbar —
- * zero counts render as nothing (feedback 2026-09-02: a "0" reads as noise),
- * and the Completed row counts its done tasks (its open count is always
- * zero).
+ * The lists panel: a selection screen (feedback 7) — tapping a row picks that
+ * view as the main context and returns. Rows are Inbox, All, then stored
+ * lists alphabetically; the built-in Planned and Completed views are the
+ * bottom bar's icons either side of ADD NEW (feedback 2026-10-30: the alarm
+ * clock opens Planned, the tick box opens Completed — no text rows, no back
+ * arrow, no selection underline). Each row shows its **open** task count
+ * (feedback 2026-08-26: only what's not done) near the scrollbar — zero
+ * counts render as nothing (feedback 2026-09-02: a "0" reads as noise).
  * EDIT (top right, DONE to leave — same size as the bottom-bar buttons,
  * feedback 2026-08-26) switches to delete mode: only stored lists show, each
- * with an X at the far left (no underline, no counts), and the bottom bar
- * disappears (no ADD NEW, feedback 2026-08-26). The X deletes the list
- * directly when it has no open tasks (feedback 2026-08-26); otherwise the
- * no-top-bar confirmation ("Delete list [name]?", CANCEL · DELETE) appears.
- * ADD NEW opens the new-list editor; blank is refused. Rename lives behind
- * the main panel's top-bar name.
+ * with an X at the far left (no counts), and the bottom bar disappears (no
+ * ADD NEW, feedback 2026-08-26); tapping a row opens the rename editor
+ * (feedback 2026-10-31). The X deletes the list directly when it has
+ * no open tasks (feedback 2026-08-26); otherwise the no-top-bar confirmation
+ * ("Delete list [name]?", CANCEL · DELETE) appears. ADD NEW opens the
+ * new-list editor; blank is refused. Rename lives behind the main panel's
+ * top-bar name.
  */
 class CategoriesScreen(
     sealedActivity: SealedLightActivity,
-    private val selectedKey: String,
 ) : SimpleLightScreen<TaskContext>(sealedActivity) {
 
     @Composable
@@ -78,11 +84,6 @@ class CategoriesScreen(
             ) {
                 Box {
                     LightTopBar(
-                        leftButton = LightBarButton.LightIcon(
-                            icon = LightIcons.BACK,
-                            onClick = { goBack() },
-                            contentDescription = "Back",
-                        ),
                         center = LightTopBarCenter.Text(text = "Lists"),
                     )
                     TopBarTextButton(
@@ -97,15 +98,15 @@ class CategoriesScreen(
                     LightScrollView {
                         if (editMode) {
                             // Delete mode: stored categories only, X far left,
-                            // no underline / counts (feedback 2026-08-26).
+                            // no counts (feedback 2026-08-26); tapping a row
+                            // renames it (feedback 2026-10-31).
                             categories.sortedBy { it.name.lowercase() }.forEach { category ->
                                 CategoryRow(
                                     context = TaskContext.of(category),
                                     count = 0,
-                                    selected = false,
                                     deleteMode = true,
                                     onDelete = { confirmDelete(category) },
-                                    onClick = {},
+                                    onClick = { renameCategory(category) },
                                 )
                             }
                         } else {
@@ -113,7 +114,6 @@ class CategoriesScreen(
                                 CategoryRow(
                                     context = context,
                                     count = openCountFor(context.key, tasks),
-                                    selected = context.key == selectedKey,
                                     deleteMode = false,
                                     onDelete = {},
                                     onClick = { goBack(context) },
@@ -122,17 +122,28 @@ class CategoriesScreen(
                         }
                     }
                 }
-                // No ADD NEW while editing (feedback 2026-08-26).
+                // No ADD NEW while editing (feedback 2026-08-26). The built-in
+                // Planned and Completed views live here as icons either side
+                // of ADD NEW (feedback 2026-10-30): tick box left = Completed,
+                // alarm clock right = Planned.
                 if (!editMode) {
                     LightBottomBar(
                         modifier = Modifier.navigationBarsPadding(),
                         items = listOf(
-                            null,
+                            LightBarButton.Icon(
+                                painter = completedIconPainter(),
+                                onClick = { goBack(TaskContext.COMPLETED) },
+                                contentDescription = "Completed",
+                            ),
                             LightBarButton.Text(
                                 text = "ADD NEW",
                                 onClick = { openAddCategory() },
                             ),
-                            null,
+                            LightBarButton.LightIcon(
+                                icon = LightIcons.ALARM,
+                                onClick = { goBack(TaskContext.PLANNED) },
+                                contentDescription = "Planned",
+                            ),
                         ),
                     )
                 }
@@ -146,6 +157,19 @@ class CategoriesScreen(
         }) { name ->
             if (name.isNotBlank()) {
                 TaskRepository.addCategory(name)
+            }
+        }
+    }
+
+    /** Tapping a list in EDIT mode opens the rename editor (feedback
+     *  2026-10-31) — the same editor the main panel's top-bar name uses;
+     *  blank keeps the old name. */
+    private fun renameCategory(category: Category) {
+        navigateTo(screenFactory = {
+            TitleEditorScreen(it, title = "Edit List", initial = category.name)
+        }) { name ->
+            if (name.isNotBlank()) {
+                TaskRepository.renameCategory(category.id, name)
             }
         }
     }
@@ -186,17 +210,17 @@ class CategoriesScreen(
         }
 }
 
-/** One context row: the name left, the open task count near the scrollbar
+/** One list row: the name left, the open task count near the scrollbar
  *  (feedback 2026-08-26), omitted entirely when it is zero (feedback
  *  2026-09-02); in delete mode a stored category shows an X at the
- *  far left instead of the count (feedback 2026-08-26) and the selection
- *  underline is suppressed. The row keeps its padding in both modes, so the
- *  spacing never changes (feedback 2026-08-26). All text full content color. */
+ *  far left instead of the count (feedback 2026-08-26). The row keeps its
+ *  padding in both modes, so the spacing never changes (feedback
+ *  2026-08-26). No selection underline (feedback 2026-10-30). All text full
+ *  content color. */
 @Composable
 private fun CategoryRow(
     context: TaskContext,
     count: Int,
-    selected: Boolean,
     deleteMode: Boolean,
     onDelete: () -> Unit,
     onClick: () -> Unit,
@@ -223,18 +247,55 @@ private fun CategoryRow(
                 modifier = Modifier.weight(1f),
             )
         } else {
-            Box(modifier = Modifier.weight(1f)) {
-                LightText(
-                    text = context.name,
-                    variant = LightTextVariant.Heading,
-                    modifier = if (selected) Modifier.thinUnderline() else Modifier,
-                )
-            }
+            LightText(
+                text = context.name,
+                variant = LightTextVariant.Heading,
+                modifier = Modifier.weight(1f),
+            )
             // No count when there is nothing to count (feedback 2026-09-02).
             if (count > 0) {
                 LightText(
                     text = count.toString(),
                     variant = LightTextVariant.Copy,
+                )
+            }
+        }
+    }
+}
+
+/** The bottom bar's Completed icon — the drawn tick box (no SDK drawable
+ *  matches; feedback 2026-10-30 asked for "the tick box"). Open square with a
+ *  check inside, strokes slightly thicker than the task-row box so the 2-unit
+ *  bar icon reads at a glance (feedback 2026-10-30). */
+@Composable
+private fun completedIconPainter(): Painter {
+    val colors = LightThemeTokens.colors
+    return remember(colors) {
+        object : Painter() {
+            override val intrinsicSize = Size.Unspecified
+            override fun DrawScope.onDraw() {
+                val stroke = 3.dp.toPx()
+                drawRect(
+                    color = colors.content,
+                    topLeft = Offset(stroke / 2f, stroke / 2f),
+                    size = Size(size.width - stroke, size.height - stroke),
+                    style = Stroke(width = stroke),
+                )
+                val cx = size.width
+                val cy = size.height
+                drawLine(
+                    color = colors.content,
+                    start = Offset(cx * 0.22f, cy * 0.52f),
+                    end = Offset(cx * 0.44f, cy * 0.74f),
+                    strokeWidth = stroke,
+                    cap = StrokeCap.Round,
+                )
+                drawLine(
+                    color = colors.content,
+                    start = Offset(cx * 0.44f, cy * 0.74f),
+                    end = Offset(cx * 0.80f, cy * 0.28f),
+                    strokeWidth = stroke,
+                    cap = StrokeCap.Round,
                 )
             }
         }

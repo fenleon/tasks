@@ -50,11 +50,14 @@ class ConfirmDeleteScreen(
                     .fillMaxSize()
                     .background(LightThemeTokens.colors.background),
             ) {
-                Box(modifier = Modifier.weight(1f)) {
+                Box(
+                    modifier = Modifier.weight(1f),
+                    contentAlignment = Alignment.Center,
+                ) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 4f.gridUnitsAsDp(), start = 2f.gridUnitsAsDp(), end = 2f.gridUnitsAsDp()),
+                            .padding(horizontal = 2f.gridUnitsAsDp()),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         LightText(
@@ -66,6 +69,7 @@ class ConfirmDeleteScreen(
                             LightText(
                                 text = it,
                                 variant = LightTextVariant.Copy,
+                                align = TextAlign.Center,
                                 modifier = Modifier.padding(top = 0.5f.gridUnitsAsDp()),
                             )
                         }

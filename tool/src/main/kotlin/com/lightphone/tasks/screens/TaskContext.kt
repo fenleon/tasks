@@ -19,10 +19,11 @@ data class TaskContext(
         val PLANNED = TaskContext(TaskRepository.KEY_PLANNED, "Planned")
         val COMPLETED = TaskContext(TaskRepository.KEY_COMPLETED, "Completed")
 
-        /** The categories-panel order (feedback 11): built-ins first, then
-         *  stored categories alphabetically. */
+        /** The lists-panel rows (feedback 2026-10-30: Planned and Completed
+         *  moved to the panel's bottom bar as icons — they aren't rows):
+         *  All, Inbox, then stored categories alphabetically. */
         fun all(categories: List<Category>): List<TaskContext> =
-            listOf(ALL, INBOX, PLANNED, COMPLETED) +
+            listOf(ALL, INBOX) +
                 categories.sortedBy { it.name.lowercase() }.map { of(it) }
 
         fun of(category: Category) = TaskContext(category.id, category.name)

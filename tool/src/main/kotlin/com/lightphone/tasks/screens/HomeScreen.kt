@@ -94,8 +94,9 @@ class HomeViewModel : LightViewModel<Unit>() {
     private val doneHideTimers = mutableMapOf<String, Job>()
 
     /** Planned's DUE TODAY filter (feedback 2026-08-26): when set, only tasks
-     *  due today show; the bottom-bar button reads VIEW ALL. Reset by
-     *  [select]. */
+     *  due today show; the bottom-bar button reads VIEW ALL (VIEW TODAY when
+     *  unset). [select] sets it for Planned, clears it elsewhere (feedback
+     *  2026-10-30: Planned opens filtered). */
     val dueTodayOnly = MutableStateFlow(false)
 
     /** The Inbox / stored-list SHOW DONE toggle (feedback 2026-09-02): when
@@ -140,7 +141,8 @@ class HomeViewModel : LightViewModel<Unit>() {
         recentlyDone.value = emptySet()
         doneHideTimers.values.forEach { it.cancel() }
         doneHideTimers.clear()
-        dueTodayOnly.value = false
+        // Planned opens on the DUE TODAY filter (feedback 2026-10-30).
+        dueTodayOnly.value = key == TaskRepository.KEY_PLANNED
         showDone.value = false
     }
 
@@ -151,16 +153,23 @@ class HomeViewModel : LightViewModel<Unit>() {
     fun setDone(task: Task, done: Boolean) {
         TaskRepository.setDone(task.id, done)
         if (done) {
-            recentlyDone.value = recentlyDone.value + task.id
-            doneHideTimers.remove(task.id)?.cancel()
-            doneHideTimers[task.id] = viewModelScope.launch {
-                delay(doneHideDelayMs)
-                recentlyDone.value = recentlyDone.value - task.id
-                doneHideTimers.remove(task.id)
-            }
+            keepDoneVisible(task.id)
         } else {
             recentlyDone.value = recentlyDone.value - task.id
             doneHideTimers.remove(task.id)?.cancel()
+        }
+    }
+
+    /** Keep a just-done task visible (struck) for [doneHideDelayMs] — fed by
+     *  the row check on Home and by the details screen's MARK DONE (feedback
+     *  2026-10-30, which returns here so the struck task shows on return). */
+    fun keepDoneVisible(taskId: String) {
+        recentlyDone.value = recentlyDone.value + taskId
+        doneHideTimers.remove(taskId)?.cancel()
+        doneHideTimers[taskId] = viewModelScope.launch {
+            delay(doneHideDelayMs)
+            recentlyDone.value = recentlyDone.value - taskId
+            doneHideTimers.remove(taskId)
         }
     }
 
@@ -190,6 +199,7 @@ class HomeScreen(sealedActivity: SealedLightActivity) :
         val categories by viewModel.categories.collectAsState()
         val dueTodayOnly by viewModel.dueTodayOnly.collectAsState()
         val showDone by viewModel.showDone.collectAsState()
+        val allTasks by TaskRepository.tasks.collectAsState()
 
         LightTheme(colors = themeColors) {
             Column(
@@ -219,7 +229,14 @@ class HomeScreen(sealedActivity: SealedLightActivity) :
                     }
                     if (shown.isEmpty()) {
                         EmptyState(
-                            text = if (dueTodayOnly) "There are no tasks due today." else "No tasks yet",
+                            // Planned reads "no tasks due" (its emptiness is
+                            // about dues, not the list being empty — feedback
+                            // 2026-10-31); other views keep "no tasks yet".
+                            text = when {
+                                dueTodayOnly -> "there are no tasks due today"
+                                context == TaskContext.PLANNED -> "there are no tasks due"
+                                else -> "no tasks yet"
+                            },
                         )
                     } else {
                         LightScrollView {
@@ -268,7 +285,7 @@ class HomeScreen(sealedActivity: SealedLightActivity) :
                         if (context.key == TaskRepository.KEY_PLANNED) {
                             add(
                                 LightBarButton.Text(
-                                    text = if (dueTodayOnly) "VIEW ALL" else "DUE TODAY",
+                                    text = if (dueTodayOnly) "VIEW ALL" else "VIEW TODAY",
                                     onClick = { viewModel.toggleDueToday() },
                                 ),
                             )
@@ -278,13 +295,24 @@ class HomeScreen(sealedActivity: SealedLightActivity) :
                         ) {
                             // Inbox and stored lists get the SHOW DONE toggle
                             // (feedback 2026-09-02) — mix the view's completed
-                            // tasks back in / hide them again.
-                            add(
-                                LightBarButton.Text(
-                                    text = if (showDone) "HIDE DONE" else "SHOW DONE",
-                                    onClick = { viewModel.toggleShowDone() },
-                                ),
-                            )
+                            // tasks back in / hide them again. No completed
+                            // tasks in the view → no button (2026-10-31).
+                            val hasDone = allTasks.any {
+                                it.deletedAt == null && it.done && when (context.key) {
+                                    TaskRepository.KEY_INBOX -> it.categoryId == null
+                                    else -> it.categoryId == context.key
+                                }
+                            }
+                            if (hasDone) {
+                                add(
+                                    LightBarButton.Text(
+                                        text = if (showDone) "HIDE DONE" else "SHOW DONE",
+                                        onClick = { viewModel.toggleShowDone() },
+                                    ),
+                                )
+                            } else {
+                                add(null)
+                            }
                         } else {
                             add(null)
                         }
@@ -312,13 +340,15 @@ class HomeScreen(sealedActivity: SealedLightActivity) :
     }
 
     private fun openTask(task: Task) {
-        navigateTo(screenFactory = { TaskDetailsScreen(it, taskId = task.id) })
+        navigateTo(screenFactory = { TaskDetailsScreen(it, taskId = task.id) }) { markedDoneId ->
+            // MARK DONE on the details screen: keep the task visible (struck)
+            // on return, like a row check (feedback 2026-10-30).
+            markedDoneId?.let { viewModel.keepDoneVisible(it) }
+        }
     }
 
     private fun openCategories() {
-        navigateTo(screenFactory = {
-            CategoriesScreen(it, selectedKey = viewModel.context.value.key)
-        }) { selected ->
+        navigateTo(screenFactory = { CategoriesScreen(it) }) { selected ->
             viewModel.select(selected.key)
         }
     }
@@ -429,13 +459,32 @@ private fun TaskRow(
     onToggle: () -> Unit,
     onClick: () -> Unit,
 ) {
+    // Bottom-align the tick box with the first line's text baseline
+    // (feedback 2026-10-31) — measured from a real layout of the rendered
+    // style (same construction as TaskTitle's strike), so it tracks the
+    // actual text instead of a line-height formula.
+    val textMeasurer = rememberTextMeasurer()
+    val heading = LightThemeTokens.typography.heading.scaledForScreenHeight()
+    val titleStyle = heading.copy(lineHeight = heading.fontSize * 1.15f)
+    val baseline = remember(task.title, titleStyle) {
+        textMeasurer
+            .measure(AnnotatedString(task.title), titleStyle, maxLines = 1)
+            .getLineBaseline(0)
+    }
+    val checkTop = with(LocalDensity.current) {
+        (baseline.toDp() - 1.25f.gridUnitsAsDp()).coerceAtLeast(0.dp)
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 2f.gridUnitsAsDp(), vertical = 0.5f.gridUnitsAsDp()),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment = Alignment.Top,
     ) {
-        TaskCheckBox(done = task.done, onClick = onToggle)
+        TaskCheckBox(
+            done = task.done,
+            onClick = onToggle,
+            modifier = Modifier.padding(top = checkTop),
+        )
         Spacer(Modifier.width(0.75f.gridUnitsAsDp()))
         Column(
             modifier = Modifier
@@ -458,7 +507,8 @@ private fun TaskRow(
  *  used to clip mid-word on the first line — "Drop off library books" cut off
  *  at "library"). Done rows are struck through — one 2dp line per rendered
  *  text line, at the 16b position (62% down the line), each overshooting the
- *  last letter by about one letter width (feedback 12). The strike is drawn
+ *  word ends by about a quarter letter width (feedback 12, 2026-10-31). The
+ *  strike is drawn
  *  behind the text on the title's wrapper box, from the same layout the text
  *  renders with, so a wrapped title is crossed line by line. */
 /** SDK's `scaledForScreenHeight` is internal upstream — same math via the
@@ -478,13 +528,18 @@ private fun TaskTitle(task: Task) {
     val maxTitleLines = 2
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
         val textMeasurer = rememberTextMeasurer()
+        // Tighter than the Heading default (1.35×): a wrapped two-line title
+        // reads as one block (feedback 2026-10-30). The strike measurement
+        // must use the same lineHeight or its per-line y positions drift.
         val style = LightThemeTokens.typography.heading.scaledForScreenHeight()
+        val tightLineHeight = style.fontSize * 1.15f
+        val strikeStyle = style.copy(lineHeight = tightLineHeight)
         val maxWidthPx = constraints.maxWidth
-        val strikeLayout = remember(task.title, style, maxWidthPx, task.done) {
+        val strikeLayout = remember(task.title, strikeStyle, maxWidthPx, task.done) {
             if (task.done) {
                 textMeasurer.measure(
                     text = AnnotatedString(task.title),
-                    style = style,
+                    style = strikeStyle,
                     overflow = TextOverflow.Ellipsis,
                     maxLines = maxTitleLines,
                     constraints = Constraints(maxWidth = maxWidthPx),
@@ -498,15 +553,16 @@ private fun TaskTitle(task: Task) {
             modifier = Modifier.drawBehind {
                 strikeLayout?.let { layout ->
                     val stroke = 2.dp.toPx()
-                    // ~ one letter width past the last letter (feedback 12).
-                    val overshoot = style.fontSize.toPx() * 0.5f
+                    // ~ a quarter letter width past the last letter and
+                    // before the first (feedback 12, 2026-10-31).
+                    val overshoot = style.fontSize.toPx() * 0.25f
                     repeat(layout.lineCount) { line ->
                         val top = layout.getLineTop(line)
                         val bottom = layout.getLineBottom(line)
                         val y = top + (bottom - top) * 0.62f
                         drawLine(
                             color = content,
-                            start = Offset(0f, y),
+                            start = Offset(-overshoot, y),
                             end = Offset(layout.getLineRight(line) + overshoot, y),
                             strokeWidth = stroke,
                         )
@@ -517,6 +573,7 @@ private fun TaskTitle(task: Task) {
             LightText(
                 text = task.title,
                 variant = LightTextVariant.Heading,
+                lineHeight = tightLineHeight,
                 maxLines = maxTitleLines,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -531,13 +588,17 @@ private fun TaskTitle(task: Task) {
 private fun TaskCheckBox(
     done: Boolean,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val content = LightThemeTokens.colors.content
     val background = LightThemeTokens.colors.background
     val density = LocalDensity.current
     val stroke = with(density) { 2.dp.toPx() }
+    // The tick reads thicker than the box (3 dp vs 2 dp, feedback
+    // 2026-10-31) — same as the Lists panel's bottom-bar tick box.
+    val tickStroke = with(density) { 3.dp.toPx() }
     Box(
-        modifier = Modifier
+        modifier = modifier
             .widthIn(min = 3.5f.gridUnitsAsDp())
             .lightClickable(onClick = onClick),
         contentAlignment = Alignment.Center,
@@ -551,14 +612,14 @@ private fun TaskCheckBox(
                     color = background,
                     start = Offset(cx * 0.22f, cy * 0.52f),
                     end = Offset(cx * 0.44f, cy * 0.74f),
-                    strokeWidth = stroke,
+                    strokeWidth = tickStroke,
                     cap = StrokeCap.Round,
                 )
                 drawLine(
                     color = background,
                     start = Offset(cx * 0.44f, cy * 0.74f),
                     end = Offset(cx * 0.80f, cy * 0.28f),
-                    strokeWidth = stroke,
+                    strokeWidth = tickStroke,
                     cap = StrokeCap.Round,
                 )
             } else {
