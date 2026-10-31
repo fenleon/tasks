@@ -24,12 +24,13 @@ Tasks is in **beta**. It is suitable for daily use; features and behavior may st
 
 # Screenshots
 
-Tasks in the All, task details, and Planned views (light-on-black):
+Tasks in the Inbox, Planned, and Completed views, and the Lists panel (light-on-black):
 
 <p align="center">
-  <img src="screenshots/home-all.png" width="32%" alt="All tasks, grouped by category" />
-  <img src="screenshots/details.png" width="32%" alt="A task's read-only details" />
-  <img src="screenshots/planned.png" width="32%" alt="Planned view — Overdue, Due Today, Upcoming" />
+  <img src="screenshots/inbox.png" width="24%" alt="The Inbox main list" />
+  <img src="screenshots/planned.png" width="24%" alt="Planned view — Overdue and Upcoming" />
+  <img src="screenshots/completed.png" width="24%" alt="Completed tasks, struck through" />
+  <img src="screenshots/lists.png" width="24%" alt="The Lists panel" />
 </p>
 
 ---
