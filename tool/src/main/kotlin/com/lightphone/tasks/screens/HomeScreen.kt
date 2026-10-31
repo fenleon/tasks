@@ -464,8 +464,7 @@ private fun TaskRow(
     // style (same construction as TaskTitle's strike), so it tracks the
     // actual text instead of a line-height formula.
     val textMeasurer = rememberTextMeasurer()
-    val heading = LightThemeTokens.typography.heading.scaledForScreenHeight()
-    val titleStyle = heading.copy(lineHeight = heading.fontSize * 1.15f)
+    val titleStyle = LightThemeTokens.typography.heading.scaledForScreenHeight()
     val baseline = remember(task.title, titleStyle) {
         textMeasurer
             .measure(AnnotatedString(task.title), titleStyle, maxLines = 1)
@@ -528,12 +527,15 @@ private fun TaskTitle(task: Task) {
     val maxTitleLines = 2
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
         val textMeasurer = rememberTextMeasurer()
-        // Tighter than the Heading default (1.35×): a wrapped two-line title
-        // reads as one block (feedback 2026-10-30). The strike measurement
-        // must use the same lineHeight or its per-line y positions drift.
+        // The strike measurement must use the exact style the text renders
+        // with (the scaled heading variant, default 1.35× lineHeight) or its
+        // per-line y positions drift. NOTE: LightText's lineHeight param is
+        // NOT used — Light's Tool Library builder bakes an SDK older than
+        // v0.2.0 that lacks it (upstream main has it; the 2026-10-31
+        // submission failed on exactly this), so wrapped titles use the
+        // default spacing.
         val style = LightThemeTokens.typography.heading.scaledForScreenHeight()
-        val tightLineHeight = style.fontSize * 1.15f
-        val strikeStyle = style.copy(lineHeight = tightLineHeight)
+        val strikeStyle = style
         val maxWidthPx = constraints.maxWidth
         val strikeLayout = remember(task.title, strikeStyle, maxWidthPx, task.done) {
             if (task.done) {
@@ -573,7 +575,6 @@ private fun TaskTitle(task: Task) {
             LightText(
                 text = task.title,
                 variant = LightTextVariant.Heading,
-                lineHeight = tightLineHeight,
                 maxLines = maxTitleLines,
                 overflow = TextOverflow.Ellipsis,
             )
