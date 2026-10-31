@@ -1,8 +1,8 @@
 [tool]
 id = "com.lightphone.tasks"
 label = "Tasks"
-versionCode = 4
-versionName = "0.3.0"
+versionCode = 5
+versionName = "0.3.1"
 # Single-module tool (the passes pattern): no embedded server — all SDK server
 # calls (permissions, key forwarding) go to the platform's own service:
 # com.lightos on a real LP3. The emulator's LightOS server is
